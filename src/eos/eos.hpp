@@ -347,6 +347,32 @@ class IdealMHD : public EquationOfState {
                   const int jl, const int ju, const int kl, const int ku) override;
 };
 
+//------------------------------------------------------------------------------
+//! \class CGLMHD
+//! \brief Skeleton class for CGL (Chew-Goldberger-Low) MHD with collisional
+//!        relaxation toward Braginskii behavior.  This implementation stores the
+//!        parallel and perpendicular pressures in extra primitive variables.  A
+//!        simple collisional isotropization source term can relax these towards
+//!        an isotropic pressure on large scales.  The flux calculation is
+//!        currently identical to the ideal MHD case and should be extended in
+//!        the future.
+
+class CGLMHD : public EquationOfState {
+ public:
+  using EquationOfState::ConsToPrim;
+  using EquationOfState::PrimToCons;
+
+  CGLMHD(MeshBlockPack *pp, ParameterInput *pin);
+  void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+                  DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                  const bool only_testfloors,
+                  const int il, const int iu, const int jl, const int ju,
+                  const int kl, const int ku) override;
+  void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+                  DvceArray5D<Real> &cons, const int il, const int iu,
+                  const int jl, const int ju, const int kl, const int ku) override;
+};
+
 //----------------------------------------------------------------------------------------
 //! \class IdealSRMHD
 //! \brief Derived class for ideal gas EOS in special relativistic MHD
