@@ -69,6 +69,18 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     }
     nmhd = 5;
 
+  // CGL EOS (anisotropic pressure)
+  } else if (eqn_of_state.compare("cgl") == 0) {
+    if (pmy_pack->pcoord->is_special_relativistic ||
+        pmy_pack->pcoord->is_general_relativistic) {
+      std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line "<< __LINE__ << std::endl
+                <<"<mhd> eos = cgl currently only implemented for NR"<< std::endl;
+      std::exit(EXIT_FAILURE);
+    } else {
+      peos = new CGLMHD(ppack, pin);
+    }
+    nmhd = 5;
+
   // isothermal EOS
   } else if (eqn_of_state.compare("isothermal") == 0) {
     if (pmy_pack->pcoord->is_special_relativistic ||
