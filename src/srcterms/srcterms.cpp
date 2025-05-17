@@ -73,6 +73,22 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
   } else {
     shearing_box = false;
   }
+
+  // (6) CGL collisional relaxation
+  cgl_collisions = pin->GetOrAddBoolean(block, "cgl_collisions", false);
+  if (cgl_collisions) {
+    nu_cgl = pin->GetOrAddReal(block, "nu_cgl", 0.0);
+    firehose_coeff = pin->GetOrAddReal(block, "cgl_firehose_coeff", 1.0);
+    mirror_coeff   = pin->GetOrAddReal(block, "cgl_mirror_coeff", 0.5);
+    if (pmy_pack->pmhd->nscalars < 2) {
+      std::cout << "### WARNING in "<< __FILE__ <<" at line "<< __LINE__ << std::endl
+                << "cgl_collisions requires at least two scalar variables" << std::endl;
+    }
+  } else {
+    nu_cgl = 0.0;
+    firehose_coeff = 1.0;
+    mirror_coeff = 0.5;
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -231,6 +247,65 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
         if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0(m,n,k,j,i) = 0.0; }
       }
     }
+  });
+
+  return;
+}
+
+//------------------------------------------------------------------------------
+//! \fn SourceTerms::CGLCollisionalRelax()
+//! \brief Simple isotropization of parallel and perpendicular pressures with
+//!        microinstability-limited anisotropy.
+
+void SourceTerms::CGLCollisionalRelax(const DvceArray5D<Real> &w0,
+                                      const DvceArray5D<Real> &bcc0,
+                                      const Real bdt,
+                                      DvceArray5D<Real> &u0) {
+  if (nu_cgl <= 0.0) return;
+
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb1 = pmy_pack->nmb_thispack - 1;
+  int &nmhd  = pmy_pack->pmhd->nmhd;
+  int &nscal = pmy_pack->pmhd->nscalars;
+
+  if (nscal < 2) return; // need at least two scalar slots
+
+  int ippar = nmhd;       // first scalar slot
+  int ipperp = nmhd + 1;  // second scalar slot
+
+  Real nu = nu_cgl;
+  Real fcoeff = firehose_coeff;
+  Real mcoeff = mirror_coeff;
+  par_for("cgl_relax", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real ppar  = w0(m,ippar,k,j,i);
+    Real pperp = w0(m,ipperp,k,j,i);
+    Real p_sum = ppar + 2.0*pperp;
+    Real p_iso = p_sum/3.0;
+
+    // relaxation toward isotropic pressure
+    Real ppar_r  = ppar  + (p_iso - ppar)*nu*bdt;
+    Real pperp_r = pperp + (p_iso - pperp)*nu*bdt;
+    Real delta   = ppar_r - pperp_r;
+
+    // microinstability limits from Quataert et al. 2023 (arXiv:2303.00468)
+    Real bx = bcc0(m,IBX,k,j,i);
+    Real by = bcc0(m,IBY,k,j,i);
+    Real bz = bcc0(m,IBZ,k,j,i);
+    Real B2 = bx*bx + by*by + bz*bz;
+    Real delta_max =  mcoeff*B2;
+    Real delta_min = -fcoeff*B2;
+
+    delta = fmin(fmax(delta, delta_min), delta_max);
+
+    Real ppar_new  = (p_sum + 2.0*delta)/3.0;
+    Real pperp_new = (p_sum -    delta)/3.0;
+
+    u0(m,ippar,k,j,i) += ppar_new - ppar;
+    u0(m,ipperp,k,j,i) += pperp_new - pperp;
   });
 
   return;

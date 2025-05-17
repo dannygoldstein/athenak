@@ -39,6 +39,7 @@ class SourceTerms {
   bool rel_cooling;
   bool beam;
   bool shearing_box, shearing_box_r_phi;
+  bool cgl_collisions;
 
   // new timestep
   Real dtnew;
@@ -57,6 +58,11 @@ class SourceTerms {
   // beam source
   Real dii_dt;
 
+  // collisional isotropization
+  Real nu_cgl;
+  Real firehose_coeff;
+  Real mirror_coeff;
+
   // shearing box
   Real qshear, omega0;
 
@@ -68,6 +74,9 @@ class SourceTerms {
   void RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos,
                   const Real dt, DvceArray5D<Real> &u0);
   void BeamSource(DvceArray5D<Real> &i0, const Real dt);
+  void CGLCollisionalRelax(const DvceArray5D<Real> &w0,
+                           const DvceArray5D<Real> &bcc0,
+                           const Real dt, DvceArray5D<Real> &u0);
   void ShearingBox(const DvceArray5D<Real> &w0, const EOS_Data &eos_data, const Real bdt,
                    DvceArray5D<Real> &u0);
   void ShearingBox(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
